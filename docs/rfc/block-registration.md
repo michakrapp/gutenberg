@@ -55,7 +55,7 @@ To register a new block type, start by creating a `block.json` file. This file:
 * Gives a name to the block type.
 * Defines some important metadata about the registered block type (title, category, icon, description, keywords).
 * Defines the attributes of the block type.
-* Links to the editor implementation of your block type, the save function and any other context-aware property.
+* Registers all the scripts and styles for your block type.
 
 **Example:**
 
@@ -76,12 +76,24 @@ To register a new block type, start by creating a `block.json` file. This file:
 			"selector": ".meessage"
 		}
 	},
-	"edit": "blocks/notice-edit.js",
-	"save": "blocks/notice-save.js",
 	"styles": [ 
 		{ "name": "default", "label": "Default", "isDefault": true }, 
 		{ "name": "other", "label": "Other" }
-	]
+	],
+	"editorScript": "file:build/editor.assets.json",
+	"script": {
+		"handle": "my-plugin-notice",
+        "file": "index.js",
+        "dependencies": [ "wp-element", "wp-components" ],
+        "version": "3.0.0"
+	},
+	"editorStyle": {
+		"handle": "my-plugin-notice-editor",
+		"file": "editor.css",
+		"dependencies": [ "wp-edit-blocks" ]
+	},
+	"style": "my-plugin-notice",
+	"textdomain": "my-plugin"
 }
 ```
 
@@ -105,16 +117,6 @@ The name for a block is a unique string that identifies a block. Names have to b
 **Note:** A block name can only contain lowercase alphanumeric characters, dashes, and at most one forward slash to designate the plugin-unique namespace prefix. It must begin with a letter.
 
 **Note:** This name is used on the comment delimiters as `<!-- wp:my-plugin/book -->`. Block types in the `core` namespace do not include a namespace when serialized.
-
-**Important Note:**
-
-Other block properties that point to JavaScript files use this identifier to provide values of the given properties.
-
-For instance, to define an SVG icon in a `block.js` file, you should attach it to the blocks global variable like so:
-
-```js
-blocks[ 'core/heading' ].icon = // SVG element of the icon. 
-```
 
 ### Title
 
@@ -169,7 +171,7 @@ Setting `parent` lets a block require that it is only available when nested with
 
 ### Icon
 
-* Type: `string`|`object`
+* Type: `string``
 * Optional
 * Localized: No
 * Property: `icon`
@@ -177,21 +179,10 @@ Setting `parent` lets a block require that it is only available when nested with
 ```json
 { "icon": "smile" }
 ```
-```json
-{ "icon": {
-	"slug": "star",
-	"src": "./my-file.js",
-	"foreground": "#000000",
-	"background": "#FFFFFF"
-} }
-```
 
-An icon property should be specified to make it easier to identify a block. These can be any of WordPress' Dashicons (slug serving also as a fallback if non-js contexts), and a path to a JavaScript file containing the block's icon property custom SVG element.
+An icon property should be specified to make it easier to identify a block. These can be any of WordPress' Dashicons (slug serving also as a fallback in non-js contexts).
 
-Besides the dashicon or the source of the SVG element, the icon object can contain background and foreground colors, this colors will appear with the icon when they are applicable e.g.: in the inserter.
-
-**Note:** Custom SVG icons are automatically wrapped in the [wp.components.SVG](https://wordpress.org/gutenberg/handbook/designers-developers/developers/components/svg/) component to add accessibility attributes (aria-hidden, role, and focusable).
-
+**Note:** It's also possible to override this property on the client-side with the source of the SVG element. In addition, this property can be defined with JavaScript as an object containing background and foreground colors. This colors will appear with the icon when they are applicable e.g.: in the inserter. Custom SVG icons are automatically wrapped in the [wp.components.SVG](https://wordpress.org/gutenberg/handbook/designers-developers/developers/components/svg/) component to add accessibility attributes (aria-hidden, role, and focusable).
 
 ### Description
 
@@ -248,59 +239,6 @@ Attributes provide the structured data needs of a block. They can exist in diffe
 
 See the [the attributes documentation](https://wordpress.org/gutenberg/handbook/designers-developers/developers/block-api/block-attributes/) for more details.
 
-### Edit
-
-* Type: `string` (`WPDefinedPropertyFile`)
-* Optional
-* Localized: No
-* Property: `edit`
-
-```json
-{ "edit": "my-block-edit.js" }
-```
-
-This property is a pointer to a JavaScript file containing the edit function of the block type. The edit function describes the structure of your block in the context of the editor. This represents what the editor will render when the block is used.
-
-See the [Edit and Save](https://wordpress.org/gutenberg/handbook/designers-developers/developers/block-api/block-edit-save/) documentation for more details.
-
-**Important Note:**
-
-The `WPDefinedPropertyFile` type described here is a subtype of string, where the value must represent an absolute or relative path to a file by which a dynamic value or values of a property can be interpreted.
-
-_TBD: Describe the resolution behavior by file extension, and consider further extension-specific subtypes (e.g. WPDefinedJSPropertyFile)._
-
-### Save
-
-* Type: `string` (`WPDefinedPropertyFile`)
-* Optional
-* Localized: No
-* Property: `save`
-
-```json
-{ "save": "my-block-save.js" }
-```
-
-This property is a pointer to a JavaScript file containing the save function of the block type. The save function defines the way in which the different attributes should be combined into the final markup, which is then serialized by Gutenberg into `post_content`.
-
-See the [Edit and Save](https://wordpress.org/gutenberg/handbook/designers-developers/developers/block-api/block-edit-save/) documentation for more details.
-
-If omitted, the implementation should fall back to one as if it were defined as a function returning `null`, where the expected behavior is to serialize without any inner HTML (a "void block").
-
-### Render Callback
-
-* Type: `string` (`WPDefinedPropertyFile`)
-* Optional
-* Localized: No
-* Property: `renderCallback`
-
-```json
-{ "renderCallback": "my-block-render-callback.php" }
-```
-
-This is a pointer to a php file returning a render callback php function.  The render callback is function called when the block is rendered on the frontend. It's used to generate the frontend markup dynamically.
-
-See the [dynamic blocks documentation](https://wordpress.org/gutenberg/handbook/designers-developers/developers/tutorials/block-tutorial/creating-dynamic-blocks/) for more details.
-
 ### Style Variations
 
 *   Type: `array`
@@ -321,54 +259,89 @@ Block styles can be used to provide alternative styles to block. It works by add
 
 Plugins and Themes can also register [custom block style](https://wordpress.org/gutenberg/handbook/designers-developers/developers/filters/block-filters/#block-style-variations) for existing blocks.
 
-### Transforms
+### Editor Script
 
-* Type: `string` (`WPDefinedPropertyFile`)
+* Type: `string|object`
 * Optional
 * Localized: No
-* Property: `transforms`
-
-```json
-{ "transforms": "my-block-transforms.js" }
-```
-
-This property is a pointer to a JavaScript file containing the save function of the block transforms. The save function defines the way in which the different attributes should be combined into the final markup, which is then serialized by Gutenberg into `post_content`.
-
-See the [Transforms](https://wordpress.org/gutenberg/handbook/designers-developers/developers/block-api/block-registration/#transforms-optional) documentation for more details.
-
-### Deprecated versions
-
-* Type: `string` (`WPDefinedPropertyFile`)
-* Optional
-* Localized: No
-* Property: `deprecated`
-
-```json
-{ "deprecated": "my-block-deprecated.js" }
-```
-
-This property contains the definition of the deprecated versions of the block type. It is used to ensure that old blocks with old markup are not considered invalid.
-
-See the [Deprecated Blocks](https://wordpress.org/gutenberg/handbook/designers-developers/developers/block-api/block-deprecation/) documentation for more details.
-
-### Stylesheets
-
-* Type: `object`
-* Optional
-* Localized: No
-* Property: `stylesheets`
+* Property: `editorScript`
 
 ```json
 {
-	"stylesheets": {
-		"main": "my-block-style.css",
-		"editor": "my-block-editor-style.css",
-		"theme": "my-block-theme-style.css"
+	"editorScript": "file:build/editor.assets.json"
+}
+```
+
+This property is a pointer to CSS files containing the CSS used for the block in different contexts.
+
+### Script
+
+* Type: `string|object`
+* Optional
+* Localized: No
+* Property: `script`
+
+```json
+{
+	"script": {
+		"handle": "my-plugin-notice",
+ 		"file": "index.js",
+		"dependencies": [ "wp-element", "wp-components" ],
+		"version": "3.0.0"
 	}
 }
 ```
 
 This property is a pointer to CSS files containing the CSS used for the block in different contexts.
+
+### Editor Style
+
+* Type: `string|object`
+* Optional
+* Localized: No
+* Property: `editorStyle`
+
+```json
+{
+	"editorStyle": {
+		"handle": "my-plugin-notice-editor",
+    	"file": "editor.css",
+    	"dependencies": [ "wp-edit-blocks" ]
+	}
+}
+```
+
+This property is a pointer to CSS files containing the CSS used for the block in different contexts.
+
+### Style
+
+* Type: `string|object`
+* Optional
+* Localized: No
+* Property: `style`
+
+```json
+{
+	"style": "my-plugin-notice"
+}
+```
+
+This property is a pointer to CSS files containing the CSS used for the block in different contexts.
+
+### Render Callback
+
+* Type: `string` (`WPDefinedPropertyFile`)
+* Optional
+* Localized: No
+* Property: `renderCallback`
+
+```json
+{ "renderCallback": "my-block-render-callback.php" }
+```
+
+This is a pointer to a php file returning a render callback php function.  The render callback is function called when the block is rendered on the frontend. It's used to generate the frontend markup dynamically.
+
+See the [dynamic blocks documentation](https://wordpress.org/gutenberg/handbook/designers-developers/developers/tutorials/block-tutorial/creating-dynamic-blocks/) for more details.
 
 ## Backward compatibility
 
